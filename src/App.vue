@@ -21,7 +21,7 @@
           :class="{ 'active': currentRoute === '/goals2025' }"
         >
           <span class="nav-icon">🎯</span>
-          <span class="nav-text" :class="{ 'hidden': isCollapsed }">长期目标-2025</span>
+          <span class="nav-text" :class="{ 'hidden': isCollapsed }">DAG</span>
         </router-link>
       </div>
     </nav>
