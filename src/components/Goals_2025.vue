@@ -19,17 +19,8 @@
       <div class="form-item">
         <label>连接目标：</label>
         <div class="target-list">
-          <div
-            v-for="node in existingNodes"
-            :key="node.id"
-            class="target-item"
-          >
-            <input
-              type="checkbox"
-              :id="'target-' + node.id"
-              v-model="newNode.targets"
-              :value="node.id"
-            >
+          <div v-for="node in existingNodes" :key="node.id" class="target-item">
+            <input type="checkbox" :id="'target-' + node.id" v-model="newNode.targets" :value="node.id">
             <label :for="'target-' + node.id">{{ node.label }}</label>
           </div>
         </div>
@@ -45,7 +36,7 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, reactive } from 'vue';
+import { defineComponent, ref, reactive,computed } from 'vue';
 import { Network, DataSet } from 'vis-network/standalone';
 
 interface Node {
@@ -53,16 +44,23 @@ interface Node {
   label: string;
 }
 
+// 在类型声明部分明确Edge结构
 interface Edge {
+  id?: string | number; // vis-network要求边必须包含id字段
   from: number;
   to: number;
 }
+
 
 export default defineComponent({
   setup() {
     // 网络图容器
     const networkContainer = ref<HTMLElement>();
     const network = ref<Network>();
+
+    const nodesDataSet = ref<DataSet<Node, "id">>(new DataSet([]));
+    const edgesDataSet = ref<DataSet<Edge, "id">>(new DataSet([]));
+
 
     // 响应式数据
     const nodes = ref<Node[]>([
@@ -90,25 +88,39 @@ export default defineComponent({
     let nextId = 6;
 
     // 初始化网络图
+
     const initNetwork = () => {
       if (!networkContainer.value) return;
 
+      // 初始化 DataSet
+      nodesDataSet.value = new DataSet(nodes.value);
+      edgesDataSet.value = new DataSet(edges.value);
+
       const data = {
-        nodes: new DataSet(nodes.value),
-        edges: new DataSet(edges.value)
+        nodes: nodesDataSet.value,
+        edges: edgesDataSet.value
       };
 
       const options = {
         edges: {
-          arrows: { to: { enabled: true } },
-          smooth: { type: 'cubicBezier' }
+          arrows: {
+            to: {
+              enabled: true,
+              type: "arrow" // 需要明确指定类型
+            }
+          },
+          smooth: {
+            enabled: true, // 必须添加 enabled 字段
+            type: "cubicBezier",
+            roundness: 0.5 // 需要补充 roundness 参数
+          }
         }
-      };
+      }
 
       network.value = new Network(networkContainer.value, data, options);
     };
 
-    // 添加新节点
+    // 完整修改后的 addNode 方法：
     const addNode = () => {
       if (!newNode.label.trim()) {
         alert('请输入节点名称');
@@ -120,22 +132,16 @@ export default defineComponent({
         label: newNode.label.trim()
       };
 
-      // 添加节点
-      nodes.value.push(newNodeData);
+      // 添加节点到 DataSet
+      nodesDataSet.value.add(newNodeData);
 
-      // 添加所有目标边
-      newNode.targets.forEach(targetId => {
-        edges.value.push({ from: newNodeData.id, to: targetId });
-      });
-
-      // 更新网络图
-      if (network.value) {
-        const data = network.value.getData();
-        data.nodes.add(newNodeData);
-        data.edges.add(
-          edges.value.filter(e => e.from === newNodeData.id)
-        );
-      }
+      // 添加边到 DataSet
+      const newEdges = newNode.targets.map(targetId => ({
+        id: `edge_${Date.now()}_${Math.random()}`,
+        from: newNodeData.id,
+        to: targetId
+      }));
+      edgesDataSet.value.add(newEdges);
 
       // 重置表单
       showDialog.value = false;
@@ -143,8 +149,13 @@ export default defineComponent({
       newNode.targets = [];
     };
 
+
     // 计算现有节点（排除自己）
-    const existingNodes = () => nodes.value.filter(n => n.id !== nextId);
+    const existingNodes = computed<Node[]>(() =>
+      nodes.value.filter(n => n.id !== nextId)
+    );
+
+    // const existingNodes = () => nodes.value.filter(n => n.id !== nextId);
 
     return {
       networkContainer,
@@ -182,6 +193,7 @@ export default defineComponent({
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
   transition: all 0.3s ease;
 }
+
 /* 新增节点按钮 */
 .add-btn {
   position: fixed;
@@ -202,7 +214,7 @@ export default defineComponent({
   left: 0;
   width: 100%;
   height: 100%;
-  background: rgba(0,0,0,0.5);
+  background: rgba(0, 0, 0, 0.5);
   display: flex;
   justify-content: center;
   align-items: center;

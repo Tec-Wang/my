@@ -1,6 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import TodoList from '../components/TodoList.vue'
-import Goals2025 from '../components/Goals2025.vue'
+import Goals_2025 from '../components/Goals_2025.vue'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -13,7 +13,7 @@ const router = createRouter({
     {
       path: '/goals2025',
       name: 'goals2025',
-      component: Goals2025
+      component: Goals_2025
     }
   ]
 })
