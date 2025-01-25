@@ -1,75 +1,285 @@
 <template>
   <div ref="networkContainer" class="network-container"></div>
-  <!-- 增加一个按钮在页面的右上角，当点击的时候，弹出来一个新增节点的编辑框，定义节点的名称 -->
-  <button @click="showAddNodeDialog">新增节点</button>
 
+  <!-- 新增节点按钮 -->
+  <button class="add-btn" @click="showDialog = true">+ 新增节点</button>
+
+  <!-- 添加节点弹窗 -->
+  <div v-if="showDialog" class="dialog-mask">
+    <div class="dialog-content">
+      <h3>添加新节点</h3>
+
+      <!-- 节点名称输入 -->
+      <div class="form-item">
+        <label>节点名称：</label>
+        <input v-model="newNode.label" placeholder="请输入名称" />
+      </div>
+
+      <!-- 目标节点选择 -->
+      <div class="form-item">
+        <label>连接目标：</label>
+        <div class="target-list">
+          <div
+            v-for="node in existingNodes"
+            :key="node.id"
+            class="target-item"
+          >
+            <input
+              type="checkbox"
+              :id="'target-' + node.id"
+              v-model="newNode.targets"
+              :value="node.id"
+            >
+            <label :for="'target-' + node.id">{{ node.label }}</label>
+          </div>
+        </div>
+      </div>
+
+      <!-- 操作按钮 -->
+      <div class="dialog-footer">
+        <button @click="addNode" class="confirm-btn">确认添加</button>
+        <button @click="showDialog = false" class="cancel-btn">取消</button>
+      </div>
+    </div>
+  </div>
 </template>
 
 <script lang="ts">
-import { defineComponent, onMounted, onUnmounted, ref } from 'vue';
-import { Network ,DataSet} from 'vis-network/standalone';
-import type { Node, Edge, Data } from 'vis-network/standalone';
+import { defineComponent, ref, reactive } from 'vue';
+import { Network, DataSet } from 'vis-network/standalone';
 
+interface Node {
+  id: number;
+  label: string;
+}
+
+interface Edge {
+  from: number;
+  to: number;
+}
 
 export default defineComponent({
-  name: 'NetworkGraph',
   setup() {
-    const networkContainer = ref<HTMLDivElement | null>(null);
-    const network = ref<Network | null>(null);
+    // 网络图容器
+    const networkContainer = ref<HTMLElement>();
+    const network = ref<Network>();
 
-    onMounted(() => {
-      const nodes = [
-        { id: 1, label: '节点1' },
-        { id: 2, label: '节点2' },
-        { id: 3, label: '节点3' },
-        { id: 4, label: '节点4' },
-        { id: 5, label: '节点5' }
-      ];
+    // 响应式数据
+    const nodes = ref<Node[]>([
+      { id: 1, label: '节点1' },
+      { id: 2, label: '节点2' },
+      { id: 3, label: '节点3' },
+      { id: 4, label: '节点4' },
+      { id: 5, label: '节点5' }
+    ]);
 
-      const edges = [
-        { from: 1, to: 3 },
-        { from: 1, to: 2 },
-        { from: 2, to: 4 },
-        { from: 2, to: 5 }
-      ];
+    const edges = ref<Edge[]>([
+      { from: 1, to: 3 },
+      { from: 1, to: 2 },
+      { from: 2, to: 4 },
+      { from: 2, to: 5 },
+      { from: 2, to: 3 }
+    ]);
 
-      const data: Data = {
-        nodes: new DataSet<Node>(nodes),
-      edges: new DataSet<Edge>(edges)
+    // 新增节点相关状态
+    const showDialog = ref(false);
+    const newNode = reactive({
+      label: '',
+      targets: [] as number[]
+    });
+    let nextId = 6;
+
+    // 初始化网络图
+    const initNetwork = () => {
+      if (!networkContainer.value) return;
+
+      const data = {
+        nodes: new DataSet(nodes.value),
+        edges: new DataSet(edges.value)
       };
 
-      const options = {};
-
-      if (networkContainer.value) {
-        network.value = new Network(networkContainer.value, data, options);
-      }
-    });
-
-    onUnmounted(() => {
-      if (network.value) {
-        network.value.destroy();
-      }
-    });
-
-    const showAddNodeDialog = () => {
-        if (network.value) {
-          network.value.addNodeMode()
-          console.log(network.value.cluster.toString())
+      const options = {
+        edges: {
+          arrows: { to: { enabled: true } },
+          smooth: { type: 'cubicBezier' }
         }
+      };
+
+      network.value = new Network(networkContainer.value, data, options);
     };
+
+    // 添加新节点
+    const addNode = () => {
+      if (!newNode.label.trim()) {
+        alert('请输入节点名称');
+        return;
+      }
+
+      const newNodeData = {
+        id: nextId++,
+        label: newNode.label.trim()
+      };
+
+      // 添加节点
+      nodes.value.push(newNodeData);
+
+      // 添加所有目标边
+      newNode.targets.forEach(targetId => {
+        edges.value.push({ from: newNodeData.id, to: targetId });
+      });
+
+      // 更新网络图
+      if (network.value) {
+        const data = network.value.getData();
+        data.nodes.add(newNodeData);
+        data.edges.add(
+          edges.value.filter(e => e.from === newNodeData.id)
+        );
+      }
+
+      // 重置表单
+      showDialog.value = false;
+      newNode.label = '';
+      newNode.targets = [];
+    };
+
+    // 计算现有节点（排除自己）
+    const existingNodes = () => nodes.value.filter(n => n.id !== nextId);
 
     return {
       networkContainer,
-      showAddNodeDialog
+      nodes,
+      edges,
+      showDialog,
+      newNode,
+      addNode,
+      existingNodes,
+      initNetwork
     };
+  },
+
+  mounted() {
+    this.initNetwork();
   }
 });
 </script>
 
 <style scoped>
 .network-container {
-  width: 100%;
-  height: 100vh;
+  /* 调整前：left: 240px (220+20) */
+  /* 调整后：left: 260px (220+40) 增加20px间隙 */
+  left: 260px;
+
+  /* 调整前：width: calc(100% - 260px) */
+  /* 调整后：width: calc(100% - 280px) (220+40+20) */
+  width: calc(100% - 280px);
+
+  /* 其他属性保持不变 */
+  height: calc(100vh - 60px);
+  position: fixed;
+  top: 40px;
   border: 1px solid #ccc;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+}
+/* 新增节点按钮 */
+.add-btn {
+  position: fixed;
+  right: 30px;
+  top: 20px;
+  padding: 8px 16px;
+  background: #409eff;
+  color: white;
+  border-radius: 4px;
+  cursor: pointer;
+  z-index: 1000;
+}
+
+/* 弹窗样式 */
+.dialog-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.dialog-content {
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  width: 400px;
+}
+
+.form-item {
+  margin: 15px 0;
+}
+
+.target-list {
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid #eee;
+  padding: 10px;
+}
+
+.target-item {
+  padding: 8px;
+  display: flex;
+  align-items: center;
+}
+
+.dialog-footer {
+  margin-top: 20px;
+  text-align: right;
+}
+
+.confirm-btn {
+  background: #67c23a;
+  color: white;
+}
+
+.cancel-btn {
+  background: #909399;
+  color: white;
+  margin-left: 10px;
 }
 </style>
+
+<!--
+const options = {
+  edges: {
+    arrows: {
+      to: {
+        enabled: true,    // 启用目标箭头
+        type: "arrow"     // 箭头类型（默认值）
+      },
+      middle: { enabled: false }, // 中间箭头
+      from: { enabled: false }    // 源箭头
+    }
+  }
+}; -->
+
+<!--
+<style scoped>
+.network-container {
+  /* 调整前：left: 240px (220+20) */
+  /* 调整后：left: 260px (220+40) 增加20px间隙 */
+  left: 260px;
+
+  /* 调整前：width: calc(100% - 260px) */
+  /* 调整后：width: calc(100% - 280px) (220+40+20) */
+  width: calc(100% - 280px);
+
+  /* 其他属性保持不变 */
+  height: calc(100vh - 60px);
+  position: fixed;
+  top: 40px;
+  border: 1px solid #ccc;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+}
+</style> -->
