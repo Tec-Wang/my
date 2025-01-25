@@ -1,42 +1,72 @@
-<template>
-  <div ref="networkContainer" class="network-container"></div>
+  <template>
+    <div ref="networkContainer" class="network-container"></div>
 
-  <!-- 新增节点按钮 -->
-  <button class="add-btn" @click="showDialog = true">+ 新增节点</button>
+    <!-- 在模板中添加编辑弹窗 -->
+    <div v-if="editDialog" class="dialog-mask">
+      <div class="dialog-content">
+        <h3>编辑节点</h3>
 
-  <!-- 添加节点弹窗 -->
-  <div v-if="showDialog" class="dialog-mask">
-    <div class="dialog-content">
-      <h3>添加新节点</h3>
+        <!-- 节点名称编辑 -->
+        <div class="form-item">
+          <label>节点名称：</label>
+          <input v-model="editingNode.label" />
+        </div>
 
-      <!-- 节点名称输入 -->
-      <div class="form-item">
-        <label>节点名称：</label>
-        <input v-model="newNode.label" placeholder="请输入名称" />
-      </div>
-
-      <!-- 目标节点选择 -->
-      <div class="form-item">
-        <label>连接目标：</label>
-        <div class="target-list">
-          <div v-for="node in existingNodes" :key="node.id" class="target-item">
-            <input type="checkbox" :id="'target-' + node.id" v-model="newNode.targets" :value="node.id">
-            <label :for="'target-' + node.id">{{ node.label }}</label>
+        <!-- 目标节点选择 -->
+        <div class="form-item">
+          <label>连接目标：</label>
+          <div class="target-list">
+            <div v-for="node in existingNodes" :key="node.id" class="target-item">
+              <input type="checkbox" :id="'edit-target-' + node.id" v-model="editingNode.targets" :value="node.id">
+              <label :for="'edit-target-' + node.id">{{ node.label }}</label>
+            </div>
           </div>
         </div>
-      </div>
 
-      <!-- 操作按钮 -->
-      <div class="dialog-footer">
-        <button @click="addNode" class="confirm-btn">确认添加</button>
-        <button @click="showDialog = false" class="cancel-btn">取消</button>
+        <!-- 操作按钮 -->
+        <div class="dialog-footer">
+          <button @click="saveEdit" class="confirm-btn">保存</button>
+          <button @click="cancelEdit" class="cancel-btn">取消</button>
+        </div>
       </div>
     </div>
-  </div>
-</template>
+
+    <!-- 新增节点按钮 -->
+    <button class="add-btn" @click="showDialog = true">+ 新增节点</button>
+
+    <!-- 添加节点弹窗 -->
+    <div v-if="showDialog" class="dialog-mask">
+      <div class="dialog-content">
+        <h3>添加新节点</h3>
+
+        <!-- 节点名称输入 -->
+        <div class="form-item">
+          <label>节点名称：</label>
+          <input v-model="newNode.label" placeholder="请输入名称" />
+        </div>
+
+        <!-- 目标节点选择 -->
+        <div class="form-item">
+          <label>连接目标：</label>
+          <div class="target-list">
+            <div v-for="node in existingNodes" :key="node.id" class="target-item">
+              <input type="checkbox" :id="'target-' + node.id" v-model="newNode.targets" :value="node.id">
+              <label :for="'target-' + node.id">{{ node.label }}</label>
+            </div>
+          </div>
+        </div>
+
+        <!-- 操作按钮 -->
+        <div class="dialog-footer">
+          <button @click="addNode" class="confirm-btn">确认添加</button>
+          <button @click="showDialog = false" class="cancel-btn">取消</button>
+        </div>
+      </div>
+    </div>
+  </template>
 
 <script lang="ts">
-import { defineComponent, ref, reactive,computed } from 'vue';
+import { defineComponent, ref, reactive, computed, onUnmounted, watch } from 'vue';
 import { Network, DataSet } from 'vis-network/standalone';
 
 interface Node {
@@ -51,9 +81,51 @@ interface Edge {
   to: number;
 }
 
+// 定义点击事件的参数类型
+interface NetworkDoubleClickEventParams {
+  nodes: number[];
+  edges: string[];
+  event: PointerEvent;
+}
+
 
 export default defineComponent({
   setup() {
+    const editDialog = ref(false); // 添加这行初始化代码
+    const showDialog = ref(false);
+
+    // 添加键盘事件监听
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && editDialog.value) {
+        editDialog.value = false
+      }
+      if (event.key === 'Escape' && showDialog.value) {
+        showDialog.value = false
+      }
+    }
+
+    watch(showDialog, (newVal) => {
+      if (newVal) {
+        window.addEventListener('keydown', handleKeyDown)
+      } else {
+        window.removeEventListener('keydown', handleKeyDown)
+      }
+    })
+    watch(editDialog, (newVal) => {
+      if (newVal) {
+        window.addEventListener('keydown', handleKeyDown)
+      } else {
+        window.removeEventListener('keydown', handleKeyDown)
+      }
+    })
+
+
+    onUnmounted(() => {
+      window.removeEventListener('keydown', handleKeyDown)
+    })
+
+
+
     // 网络图容器
     const networkContainer = ref<HTMLElement>();
     const network = ref<Network>();
@@ -80,7 +152,6 @@ export default defineComponent({
     ]);
 
     // 新增节点相关状态
-    const showDialog = ref(false);
     const newNode = reactive({
       label: '',
       targets: [] as number[]
@@ -116,8 +187,10 @@ export default defineComponent({
           }
         }
       }
-
       network.value = new Network(networkContainer.value, data, options);
+
+      // 添加事件监听
+      network.value.on("doubleClick", handleNodeDoubleClick);
     };
 
     // 完整修改后的 addNode 方法：
@@ -157,6 +230,80 @@ export default defineComponent({
 
     // const existingNodes = () => nodes.value.filter(n => n.id !== nextId);
 
+
+    // 新增编辑相关状态
+    const editingNode = reactive({
+      id: -1,
+      label: '',
+      targets: [] as number[],
+      originalTargets: [] as number[] // 记录原始连接用于对比
+    });
+
+    // 节点点击事件处理
+    const handleNodeDoubleClick = (params: NetworkDoubleClickEventParams) => {
+      if (params.nodes.length === 1) {
+        const nodeId = params.nodes[0];
+        const node = nodesDataSet.value?.get(nodeId);
+        if (node) {
+          // 获取现有连接
+          const currentEdges = edgesDataSet.value?.get({
+            filter: (edge: Edge) => edge.from === nodeId
+          }) || [];
+
+          editingNode.id = nodeId;
+          editingNode.label = node.label;
+          editingNode.targets = currentEdges.map(e => e.to);
+          editingNode.originalTargets = [...editingNode.targets];
+
+          editDialog.value = true;
+        }
+      }
+    };
+
+    // 保存编辑
+
+    // 保存编辑
+    const saveEdit = () => {
+      // 更新节点名称
+      nodesDataSet.value?.update({
+        id: editingNode.id,
+        label: editingNode.label
+      });
+
+      // 计算需要删除的旧边
+      const removedTargets = editingNode.originalTargets
+        .filter(t => !editingNode.targets.includes(t));
+
+      // 计算需要添加的新边
+      const newTargets = editingNode.targets
+        .filter(t => !editingNode.originalTargets.includes(t));
+
+      // 删除旧边
+      removedTargets.forEach(targetId => {
+        const edge = edgesDataSet.value?.get({
+          filter: (e: Edge) => e.from === editingNode.id && e.to === targetId
+        })[0];
+        if (edge) edgesDataSet.value?.remove(edge.id);
+      });
+
+      // 添加新边
+      newTargets.forEach(targetId => {
+        edgesDataSet.value?.add({
+          id: `edge_${Date.now()}_${Math.random()}`,
+          from: editingNode.id,
+          to: targetId
+        });
+      });
+
+      editDialog.value = false;
+    };
+
+    // 取消编辑
+    const cancelEdit = () => {
+      editDialog.value = false;
+    };
+
+
     return {
       networkContainer,
       nodes,
@@ -165,7 +312,11 @@ export default defineComponent({
       newNode,
       addNode,
       existingNodes,
-      initNetwork
+      initNetwork,
+      editDialog,
+      editingNode,
+      saveEdit,
+      cancelEdit
     };
   },
 
@@ -262,36 +413,36 @@ export default defineComponent({
 </style>
 
 <!--
-const options = {
-  edges: {
-    arrows: {
-      to: {
-        enabled: true,    // 启用目标箭头
-        type: "arrow"     // 箭头类型（默认值）
-      },
-      middle: { enabled: false }, // 中间箭头
-      from: { enabled: false }    // 源箭头
+  const options = {
+    edges: {
+      arrows: {
+        to: {
+          enabled: true,    // 启用目标箭头
+          type: "arrow"     // 箭头类型（默认值）
+        },
+        middle: { enabled: false }, // 中间箭头
+        from: { enabled: false }    // 源箭头
+      }
     }
-  }
-}; -->
+  }; -->
 
 <!--
-<style scoped>
-.network-container {
-  /* 调整前：left: 240px (220+20) */
-  /* 调整后：left: 260px (220+40) 增加20px间隙 */
-  left: 260px;
+  <style scoped>
+  .network-container {
+    /* 调整前：left: 240px (220+20) */
+    /* 调整后：left: 260px (220+40) 增加20px间隙 */
+    left: 260px;
 
-  /* 调整前：width: calc(100% - 260px) */
-  /* 调整后：width: calc(100% - 280px) (220+40+20) */
-  width: calc(100% - 280px);
+    /* 调整前：width: calc(100% - 260px) */
+    /* 调整后：width: calc(100% - 280px) (220+40+20) */
+    width: calc(100% - 280px);
 
-  /* 其他属性保持不变 */
-  height: calc(100vh - 60px);
-  position: fixed;
-  top: 40px;
-  border: 1px solid #ccc;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
-  transition: all 0.3s ease;
-}
-</style> -->
+    /* 其他属性保持不变 */
+    height: calc(100vh - 60px);
+    position: fixed;
+    top: 40px;
+    border: 1px solid #ccc;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s ease;
+  }
+  </style> -->
