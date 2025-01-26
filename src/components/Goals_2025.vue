@@ -71,6 +71,7 @@
 <script lang="ts">
 import { defineComponent, ref, reactive, computed, onUnmounted, watch } from 'vue';
 import { Network, DataSet } from 'vis-network/standalone';
+import type { Id } from 'vis-data/declarations/data-interface';
 
 interface Node {
   id: number;
@@ -113,6 +114,12 @@ export default defineComponent({
       }
     }
 
+    const handleDoubleClick = (params: NetworkDoubleClickEventParams) => {
+      if (params.nodes.length === 0) {
+        // 如果双击的位置没有节点，则打开新增节点窗口
+        showDialog.value = true;
+      }
+    };
     watch(showDialog, (newVal) => {
       if (newVal) {
         window.addEventListener('keydown', handleKeyDown)
@@ -145,7 +152,7 @@ export default defineComponent({
 
     // 响应式数据
     const nodes = ref<Node[]>([
-      { id: 1, label: 'Who' },
+      { id: 1, label: '我' },
     ]);
 
     const edges = ref<Edge[]>([
@@ -238,8 +245,12 @@ export default defineComponent({
       }
       network.value = new Network(networkContainer.value, data, options);
 
-      // 添加事件监听
+      // 添加事件监听，编辑节点
       network.value.on("doubleClick", handleNodeDoubleClick);
+
+      // 添加事件监听，新增节点
+      network.value.on("doubleClick", handleDoubleClick);
+
     };
 
     // 完整修改后的 addNode 方法：
@@ -293,7 +304,7 @@ export default defineComponent({
           edge.from === nodeId || edge.to === nodeId
       }) || [];
 
-      relatedEdges.forEach(edge => {
+      relatedEdges.forEach((edge: { id: Edge | Id | (Edge | Id)[]; }) => {
         if (edge.id) edgesDataSet.value?.remove(edge.id);
       });
 
@@ -355,6 +366,11 @@ export default defineComponent({
         label: editingNode.label
       });
 
+      // 同步更新本地 nodes 数组
+      const nodeIndex = nodes.value.findIndex(n => n.id === editingNode.id);
+      if (nodeIndex !== -1) {
+        nodes.value[nodeIndex].label = editingNode.label;
+      }
       // 计算需要删除的旧边
       const removedTargets = editingNode.originalTargets
         .filter(t => !editingNode.targets.includes(t));
@@ -403,7 +419,8 @@ export default defineComponent({
       cancelEdit,
       confirmDeleteNode,
       filteredExistingNodes,
-      existingNodes
+      existingNodes,
+      handleDoubleClick
     };
   },
 
