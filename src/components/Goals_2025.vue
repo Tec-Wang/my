@@ -1,69 +1,72 @@
-  <template>
-    <div ref="networkContainer" class="network-container"></div>
+<template>
+  <div ref="networkContainer" class="network-container"></div>
 
-    <!-- 在模板中添加编辑弹窗 -->
-    <div v-if="editDialog" class="dialog-mask">
-      <div class="dialog-content">
-        <h3>编辑节点</h3>
+  <!-- 编辑节点弹窗 -->
+  <div v-if="editDialog" class="dialog-mask">
+    <div class="dialog-content">
+      <h3>编辑节点</h3>
 
-        <!-- 节点名称编辑 -->
-        <div class="form-item">
-          <label>节点名称：</label>
-          <input v-model="editingNode.label" />
-        </div>
+      <!-- 节点名称编辑 -->
+      <div class="form-item">
+        <label>节点名称：</label>
+        <input v-model="editingNode.label" />
+      </div>
 
-        <!-- 目标节点选择 -->
-        <div class="form-item">
-          <label>连接目标：</label>
-          <div class="target-list">
-            <div v-for="node in existingNodes" :key="node.id" class="target-item">
-              <input type="checkbox" :id="'edit-target-' + node.id" v-model="editingNode.targets" :value="node.id">
-              <label :for="'edit-target-' + node.id">{{ node.label }}</label>
-            </div>
+      <!-- 目标节点选择 -->
+      <div class="form-item">
+        <label>连接目标：</label>
+        <div class="target-list">
+          <div v-for="node in filteredExistingNodes" :key="node.id" class="target-item">
+            <input type="checkbox" :id="'edit-target-' + node.id" v-model="editingNode.targets" :value="node.id">
+            <label :for="'edit-target-' + node.id">{{ node.label }}</label>
           </div>
         </div>
+      </div>
 
-        <!-- 操作按钮 -->
-        <div class="dialog-footer">
+      <!-- 操作按钮（新增删除按钮） -->
+      <div class="dialog-footer">
+        <button @click="confirmDeleteNode" class="dag-node-delete-btn">❗ 删除节点</button>
+        <div class="action-buttons">
           <button @click="saveEdit" class="confirm-btn">保存</button>
           <button @click="cancelEdit" class="cancel-btn">取消</button>
         </div>
       </div>
     </div>
+  </div>
 
-    <!-- 新增节点按钮 -->
-    <button class="add-btn" @click="showDialog = true">+ 新增节点</button>
+  <!-- 新增节点按钮 -->
+  <button class="add-btn" @click="showDialog = true">+ 新增节点</button>
 
-    <!-- 添加节点弹窗 -->
-    <div v-if="showDialog" class="dialog-mask">
-      <div class="dialog-content">
-        <h3>添加新节点</h3>
+  <!-- 添加节点弹窗 -->
+  <div v-if="showDialog" class="dialog-mask">
+    <div class="dialog-content">
+      <h3>添加新节点</h3>
 
-        <!-- 节点名称输入 -->
-        <div class="form-item">
-          <label>节点名称：</label>
-          <input v-model="newNode.label" placeholder="请输入名称" />
-        </div>
+      <!-- 节点名称输入 -->
+      <div class="form-item">
+        <label>节点名称：</label>
+        <input v-model="newNode.label" placeholder="请输入名称" />
+      </div>
 
-        <!-- 目标节点选择 -->
-        <div class="form-item">
-          <label>连接目标：</label>
-          <div class="target-list">
-            <div v-for="node in existingNodes" :key="node.id" class="target-item">
-              <input type="checkbox" :id="'target-' + node.id" v-model="newNode.targets" :value="node.id">
-              <label :for="'target-' + node.id">{{ node.label }}</label>
-            </div>
+      <!-- 目标节点选择 -->
+      <div class="form-item">
+        <label>连接目标：</label>
+        <div class="target-list">
+          <div v-for="node in existingNodes" :key="node.id" class="target-item">
+            <input type="checkbox" :id="'target-' + node.id" v-model="newNode.targets" :value="node.id">
+            <label :for="'target-' + node.id">{{ node.label }}</label>
           </div>
         </div>
+      </div>
 
-        <!-- 操作按钮 -->
-        <div class="dialog-footer">
-          <button @click="addNode" class="confirm-btn">确认添加</button>
-          <button @click="showDialog = false" class="cancel-btn">取消</button>
-        </div>
+      <!-- 操作按钮 -->
+      <div class="dialog-footer">
+        <button @click="addNode" class="confirm-btn">确认添加</button>
+        <button @click="showDialog = false" class="cancel-btn">取消</button>
       </div>
     </div>
-  </template>
+  </div>
+</template>
 
 <script lang="ts">
 import { defineComponent, ref, reactive, computed, onUnmounted, watch } from 'vue';
@@ -98,8 +101,14 @@ export default defineComponent({
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape' && editDialog.value) {
         editDialog.value = false
+      } else if (event.key == 'Enter' && editDialog.value) {
+        saveEdit();
+        editDialog.value = false
       }
       if (event.key === 'Escape' && showDialog.value) {
+        showDialog.value = false
+      } else if (event.key == 'Enter' && showDialog.value) {
+        addNode();
         showDialog.value = false
       }
     }
@@ -164,6 +173,28 @@ export default defineComponent({
       };
 
       const options = {
+        interaction: {
+          dragNodes: true,
+          dragView: true,
+          hideEdgesOnDrag: false,
+          hideEdgesOnZoom: false,
+          hideNodesOnDrag: false,
+          hover: false,
+          hoverConnectedEdges: true,
+          keyboard: {
+            enabled: false,
+            speed: { x: 10, y: 10, zoom: 0.02 },
+            bindToWindow: true,
+            autoFocus: true,
+          },
+          multiselect: false,
+          navigationButtons: false,
+          selectable: true,
+          selectConnectedEdges: true,
+          tooltipDelay: 300,
+          zoomSpeed: 1,
+          zoomView: true
+        },
         edges: {
           arrows: {
             to: {
@@ -171,10 +202,37 @@ export default defineComponent({
               type: "arrow" // 需要明确指定类型
             }
           },
+          chosen: true,
+          color: {
+            color: "#000000",
+            highlight: "#FF0000"
+          },
           smooth: {
             enabled: true, // 必须添加 enabled 字段
             type: "cubicBezier",
             roundness: 0.5 // 需要补充 roundness 参数
+          }
+        },
+        nodes: {
+          borderWidth: 2,
+          borderWidthSelected: 4,
+          color: {
+            border: "#000000",
+            background: "#FFFFFF",
+            highlight: {
+              border: "#FF0000",
+              background: "#FFFF00"
+            }
+          },
+          font: {
+            size: 14,
+            color: "#000000"
+          },
+          labelHighlightBold: true,
+          shadow: {
+            enabled: true,
+            color: "#000000",
+            size: 10
           }
         }
       }
@@ -217,16 +275,48 @@ export default defineComponent({
       newNode.targets = [];
     };
 
+    // 新增删除节点方法
+    const confirmDeleteNode = () => {
+      if (confirm("确定要删除这个节点及其所有连接吗？")) {
+        deleteNode(editingNode.id);
+        editDialog.value = false;
+      }
+    };
+
+    const deleteNode = (nodeId: number) => {
+      // 删除节点
+      nodesDataSet.value?.remove(nodeId);
+
+      // 删除所有相关边
+      const relatedEdges = edgesDataSet.value?.get({
+        filter: (edge: Edge) =>
+          edge.from === nodeId || edge.to === nodeId
+      }) || [];
+
+      relatedEdges.forEach(edge => {
+        if (edge.id) edgesDataSet.value?.remove(edge.id);
+      });
+
+      // 更新本地数据（如果维护）
+      nodes.value = nodes.value.filter(n => n.id !== nodeId);
+      edges.value = edges.value.filter(e =>
+        e.from !== nodeId && e.to !== nodeId
+      );
+    };
 
     // 计算现有节点（排除自己）
+    const filteredExistingNodes = computed<{ id: number; label: string }[]>(() =>
+      nodes.value
+        .map(n => ({ id: n.id, label: n.label }))
+        .filter(n => n.id !== editingNode.id) // 排除当前编辑的节点
+    );
+
+    // 全部的节点，用于新增节点使用
     const existingNodes = computed<{ id: number; label: string }[]>(() =>
       nodes.value
         .map(n => ({ id: n.id, label: n.label }))
         .filter(n => n.id !== nextId.value) // 使用 .value 访问
     );
-
-    // const existingNodes = () => nodes.value.filter(n => n.id !== nextId);
-
 
     // 新增编辑相关状态
     const editingNode = reactive({
@@ -256,8 +346,6 @@ export default defineComponent({
         }
       }
     };
-
-    // 保存编辑
 
     // 保存编辑
     const saveEdit = () => {
@@ -308,12 +396,14 @@ export default defineComponent({
       showDialog,
       newNode,
       addNode,
-      existingNodes,
       initNetwork,
       editDialog,
       editingNode,
       saveEdit,
-      cancelEdit
+      cancelEdit,
+      confirmDeleteNode,
+      filteredExistingNodes,
+      existingNodes
     };
   },
 
@@ -336,7 +426,7 @@ export default defineComponent({
   /* 其他属性保持不变 */
   height: calc(100vh - 60px);
   position: fixed;
-  top: 40px;
+  top: 60px;
   border: 1px solid #ccc;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
   transition: all 0.3s ease;
@@ -345,7 +435,8 @@ export default defineComponent({
 /* 新增节点按钮 */
 .add-btn {
   position: fixed;
-  right: 30px;
+  left: 300px;
+  /* 从 right: 30px 改为 left: 30px */
   top: 20px;
   padding: 8px 16px;
   background: #409eff;
@@ -393,53 +484,85 @@ export default defineComponent({
 }
 
 .dialog-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   margin-top: 20px;
-  text-align: right;
+}
+
+.dag-node-delete-btn {
+  background: #409eff;
+  color: white;
+  order: 1;
+  margin-right: auto;
+  /* 左对齐 */
+  padding: 10px 20px;
+  /* 增加按钮大小 */
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 16px;
+  /* 增加字体大小 */
+  transition: background-color 0.3s ease;
+  /* 添加过渡效果 */
+}
+
+.dag-node-delete-btn:hover {
+  background-color: #66b1ff;
+  /* 鼠标悬停时的背景色 */
+}
+
+.action-buttons {
+  display: flex;
+  gap: 10px;
+  order: 2;
 }
 
 .confirm-btn {
   background: #67c23a;
   color: white;
+  margin-right: 10px;
+  padding: 10px 20px;
+  /* 增加按钮大小 */
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 16px;
+  /* 增加字体大小 */
+  transition: background-color 0.3s ease;
+  /* 添加过渡效果 */
+}
+
+.confirm-btn:hover {
+  background-color: #85ce61;
+  /* 鼠标悬停时的背景色 */
 }
 
 .cancel-btn {
   background: #909399;
   color: white;
-  margin-left: 10px;
+  padding: 10px 20px;
+  /* 增加按钮大小 */
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 16px;
+  /* 增加字体大小 */
+  transition: background-color 0.3s ease;
+  /* 添加过渡效果 */
+}
+
+.cancel-btn:hover {
+  background-color: #a6a9ad;
+  /* 鼠标悬停时的背景色 */
+}
+
+
+/* 操作按钮组调整 */
+.action-buttons {
+  display: flex;
+  gap: 10px;
+}
+
+.dialog-mask {
+  z-index: 2000;
+  /* 确保高于其他元素 */
 }
 </style>
-
-<!--
-  const options = {
-    edges: {
-      arrows: {
-        to: {
-          enabled: true,    // 启用目标箭头
-          type: "arrow"     // 箭头类型（默认值）
-        },
-        middle: { enabled: false }, // 中间箭头
-        from: { enabled: false }    // 源箭头
-      }
-    }
-  }; -->
-
-<!--
-  <style scoped>
-  .network-container {
-    /* 调整前：left: 240px (220+20) */
-    /* 调整后：left: 260px (220+40) 增加20px间隙 */
-    left: 260px;
-
-    /* 调整前：width: calc(100% - 260px) */
-    /* 调整后：width: calc(100% - 280px) (220+40+20) */
-    width: calc(100% - 280px);
-
-    /* 其他属性保持不变 */
-    height: calc(100vh - 60px);
-    position: fixed;
-    top: 40px;
-    border: 1px solid #ccc;
-    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
-    transition: all 0.3s ease;
-  }
-  </style> -->
