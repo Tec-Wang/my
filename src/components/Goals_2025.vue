@@ -136,19 +136,10 @@ export default defineComponent({
 
     // 响应式数据
     const nodes = ref<Node[]>([
-      { id: 1, label: '节点1' },
-      { id: 2, label: '节点2' },
-      { id: 3, label: '节点3' },
-      { id: 4, label: '节点4' },
-      { id: 5, label: '节点5' }
+      { id: 1, label: 'Who' },
     ]);
 
     const edges = ref<Edge[]>([
-      { from: 1, to: 3 },
-      { from: 1, to: 2 },
-      { from: 2, to: 4 },
-      { from: 2, to: 5 },
-      { from: 2, to: 3 }
     ]);
 
     // 新增节点相关状态
@@ -156,7 +147,7 @@ export default defineComponent({
       label: '',
       targets: [] as number[]
     });
-    let nextId = 6;
+    const nextId = ref(2); // 使用 ref 包裹使其响应式
 
     // 初始化网络图
 
@@ -201,12 +192,14 @@ export default defineComponent({
       }
 
       const newNodeData = {
-        id: nextId++,
+        id: nextId.value, // 使用 .value 访问
         label: newNode.label.trim()
       };
 
       // 添加节点到 DataSet
       nodesDataSet.value.add(newNodeData);
+      nodes.value.push(newNodeData); // 添加这行同步数据
+
 
       // 添加边到 DataSet
       const newEdges = newNode.targets.map(targetId => ({
@@ -216,6 +209,8 @@ export default defineComponent({
       }));
       edgesDataSet.value.add(newEdges);
 
+      nextId.value++; // 使用 .value 修改
+
       // 重置表单
       showDialog.value = false;
       newNode.label = '';
@@ -224,8 +219,10 @@ export default defineComponent({
 
 
     // 计算现有节点（排除自己）
-    const existingNodes = computed<Node[]>(() =>
-      nodes.value.filter(n => n.id !== nextId)
+    const existingNodes = computed<{ id: number; label: string }[]>(() =>
+      nodes.value
+        .map(n => ({ id: n.id, label: n.label }))
+        .filter(n => n.id !== nextId.value) // 使用 .value 访问
     );
 
     // const existingNodes = () => nodes.value.filter(n => n.id !== nextId);
